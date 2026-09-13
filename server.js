@@ -32,7 +32,7 @@ app.get('/api/public-key',(q,r)=>r.json({publicKey:keys.publicKey}));
 
 app.post('/api/subscribe',(q,r)=>{
   const s=q.body?.subscription;
-  if(!s?.endpoint) return r.status(400).json({error:'Invalid subscription'});
+  if(!s?.endpoint || !s?.keys?.p256dh || !s?.keys?.auth) return r.status(400).json({error:'Invalid push subscription'});
   subs=subs.filter(x=>x.endpoint!==s.endpoint);
   subs.push(s);
   console.log('Push subscription registered. Total:',subs.length);
