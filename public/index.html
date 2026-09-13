@@ -27,25 +27,47 @@ $('connect').onclick=async()=>{
       const permission=await Notification.requestPermission();
       if(permission!=='granted') throw Error('Notification permission was denied.');
     }
+
     const keyResponse=await fetch('/api/public-key',{cache:'no-store'});
     if(!keyResponse.ok) throw Error('Could not get push settings from the server.');
     const k=await keyResponse.json();
+
     const registration=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
     const r=await navigator.serviceWorker.ready;
-    let s=await r.pushManager.getSubscription();
-    if(!s){
-      const raw=atob(k.publicKey.replace(/-/g,'+').replace(/_/g,'/'));
-      const padding='='.repeat((4-raw.length%4)%4);
-      const key=new Uint8Array([...atob(k.publicKey.replace(/-/g,'+').replace(/_/g,'/')+padding)].map(c=>c.charCodeAt(0)));
-      s=await r.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+
+    // A subscription created with an older VAPID public key can produce HTTP 403.
+    // Remove it and create a fresh subscription using the server's current key.
+    let old=await r.pushManager.getSubscription();
+    if(old) {
+      try { await old.unsubscribe(); } catch(_) {}
     }
-    const x=await fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:s.toJSON?s.toJSON():s})});
+
+    const b64=k.publicKey.replace(/-/g,'+').replace(/_/g,'/');
+    const padded=b64+'='.repeat((4-b64.length%4)%4);
+    const raw=atob(padded);
+    const key=new Uint8Array(raw.length);
+    for(let i=0;i<raw.length;i++) key[i]=raw.charCodeAt(i);
+
+    const s=await r.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:key
+    });
+
+    const x=await fetch('/api/subscribe',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({subscription:s.toJSON?s.toJSON():s})
+    });
     const result=await x.json().catch(()=>({}));
     if(!x.ok) throw Error(result.error||'Subscription failed');
+
     connected=true;
     $('send').disabled=false;
     $('status').textContent='Phone connected and ready. You can now leave this page.';
-  }catch(e){$('status').textContent=e.message}
-};
+  }catch(e){
+    console.error(e);
+    $('status').textContent=e.message||'Registration failed';
+  }
+}
 $('send').onclick=async()=>{let d=delay(),p={signal:$('signal').value,symbol:$('symbol').value,tf:$('tf').value,sl:$('sl').value,tp:$('tp').value,lot:$('lot').value,timing:t(),message:$('msg').value,delay:d};$('send').disabled=true;try{let r=await fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}),x=await r.json();if(!r.ok)throw Error(x.error);$('status').textContent=d?'Notification scheduled.':'Notification sent.'}catch(e){$('status').textContent=e.message}setTimeout(()=>{$('send').disabled=false},700)};refresh();
 </script>
