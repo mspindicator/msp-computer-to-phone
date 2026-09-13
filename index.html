@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MSP Computer Alert</title>
+<style>body{font-family:system-ui;background:#f1f3f5;padding:24px}.card{max-width:600px;margin:auto;background:white;padding:24px;border-radius:24px}label{display:block;font-weight:700;margin:12px 0 5px}input,select,textarea,button{width:100%;box-sizing:border-box;padding:13px;border-radius:12px;border:1px solid #ddd;font-size:16px}button{margin-top:15px;background:#111;color:white;font-weight:800}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.status,.preview{margin-top:15px;padding:14px;background:#f6f7f8;border-radius:14px}.preview{white-space:pre-line}</style>
+<div class=card><h1>MSP Computer Alert</h1><p>Control the notification from your computer and receive it on your phone.</p>
+<label>Signal</label><select id=signal><option>BUY</option><option>SELL</option><option>CUSTOM</option></select>
+<div class=row><div><label>Symbol</label><input id=symbol value=XAUUSD></div><div><label>Timeframe</label><input id=tf value=1H></div></div>
+<div class=row><div><label>Stop Loss (Points)</label><input id=sl value=600></div><div><label>Take Profit (Points)</label><input id=tp value=1200></div></div>
+<div class=row><div><label>Lot Size</label><input id=lot value=0.50></div><div><label>Timing</label><select id=timing><option value=0>Now</option><option value=60>1 minute</option><option value=120>2 minutes</option><option value=180>3 minutes</option><option value=300>5 minutes</option><option value=custom>Custom</option></select></div></div>
+<div id=custom style="display:none" class=row><div><label>Minutes</label><input id=mins type=number min=0 value=3></div><div><label>Seconds</label><input id=secs type=number min=0 max=59 value=0></div></div>
+<label>Message</label><textarea id=msg>New candle setup detected</textarea>
+<div class=preview id=preview></div><button id=connect>📱 CONNECT THIS PHONE</button><button id=send disabled>SEND TO PHONE</button><div class=status id=status>Phone not connected.</div></div>
+<script>
+const $=x=>document.getElementById(x);let connected=false;
+function delay(){if($('timing').value==='custom')return Math.max(0,(+$('mins').value||0)*60+(+$('secs').value||0));return +$('timing').value||0}
+function t(){let d=delay();if(!d)return'Now';return`in ${Math.floor(d/60)?Math.floor(d/60)+'m ':''}${d%60?d%60+'s':''}`.trim()}
+function body(){let s=$('signal').value,i=s==='BUY'?'🟢':s==='SELL'?'🔴':'🔔';return`${i} ${s} SIGNAL — ${$('symbol').value} • ${$('tf').value}
+SL: ${$('sl').value} points
+TP: ${$('tp').value} points
+Lot Size: ${$('lot').value}
+⏱️ ${t()}
+${$('msg').value}`}
+function refresh(){$('preview').textContent=body()}document.querySelectorAll('input,select,textarea').forEach(x=>x.oninput=refresh);
+$('timing').onchange=()=>{$('custom').style.display=$('timing').value==='custom'?'grid':'none';refresh()};
+$('connect').onclick=async()=>{try{let k=await(await fetch('/api/public-key')).json(),r=await navigator.serviceWorker.register('/sw.js');let s=await r.pushManager.getSubscription();if(!s)s=await r.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:k.publicKey});let x=await fetch('/api/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:s})});if(!x.ok)throw Error('Subscription failed');connected=true;$('send').disabled=false;$('status').textContent='Phone connected and ready.'}catch(e){$('status').textContent=e.message}};
+$('send').onclick=async()=>{let d=delay(),p={signal:$('signal').value,symbol:$('symbol').value,tf:$('tf').value,sl:$('sl').value,tp:$('tp').value,lot:$('lot').value,timing:t(),message:$('msg').value,delay:d};$('send').disabled=true;try{let r=await fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}),x=await r.json();if(!r.ok)throw Error(x.error);$('status').textContent=d?'Notification scheduled.':'Notification sent.'}catch(e){$('status').textContent=e.message}setTimeout(()=>{$('send').disabled=false},700)};refresh();
+</script>
