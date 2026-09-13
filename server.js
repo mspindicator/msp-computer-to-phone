@@ -7,11 +7,17 @@ app.use(express.json());
 app.use(express.static('public'));
 
 let keys;
+const fs=require('fs');
+const keyFile=path.join(__dirname,'vapid-keys.json');
+
 if(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY){
   keys={publicKey:process.env.VAPID_PUBLIC_KEY,privateKey:process.env.VAPID_PRIVATE_KEY};
+}else if(fs.existsSync(keyFile)){
+  keys=JSON.parse(fs.readFileSync(keyFile,'utf8'));
 }else{
   keys=webpush.generateVAPIDKeys();
-  console.warn('VAPID keys are temporary. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Render for stable subscriptions.');
+  fs.writeFileSync(keyFile,JSON.stringify(keys,null,2),'utf8');
+  console.log('Generated and saved persistent VAPID keys.');
 }
 
 webpush.setVapidDetails(
